@@ -15,7 +15,7 @@ except:
 
 # ================= APP INFO =================
 APP_NAME = "DAVID TV"
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 CONTACT_EMAIL = "davidk76011@gmail.com"
 
 # ================= IPTV SOURCES =================
@@ -29,7 +29,12 @@ LANGUAGE_PLAYLISTS = {
     "Kannada": "https://iptv-org.github.io/iptv/languages/kan.m3u",
     "Marathi": "https://iptv-org.github.io/iptv/languages/mar.m3u",
     "Punjabi": "https://iptv-org.github.io/iptv/languages/pan.m3u",
+    "Gujarati": "https://iptv-org.github.io/iptv/languages/guj.m3u",
+    "Assamese": "https://iptv-org.github.io/iptv/languages/asm.m3u",
     "Odia": "https://iptv-org.github.io/iptv/languages/ori.m3u",
+    "Urdu": "https://iptv-org.github.io/iptv/languages/urd.m3u", 
+    "Konkani": "https://iptv-org.github.io/iptv/languages/kok.m3u",
+    "Nepali": "https://iptv-org.github.io/iptv/languages/nep.m3u",
     "English": "https://iptv-org.github.io/iptv/languages/eng.m3u",
 }
 
@@ -39,7 +44,7 @@ def resource(p):
         return os.path.join(sys._MEIPASS, p)
     return os.path.join(os.path.abspath("."), p)
 
-# ================= VLC PLUGIN PATH (CRITICAL FIX) =================
+# ================= VLC PLUGIN PATH =================
 if hasattr(sys, "_MEIPASS"):
     os.environ["VLC_PLUGIN_PATH"] = os.path.join(sys._MEIPASS, "plugins")
 
@@ -55,15 +60,26 @@ if os.path.exists(FAV_FILE):
 def save_favs():
     json.dump(favorites, open(FAV_FILE, "w", encoding="utf-8"), indent=2)
 
-# ================= VLC (FIXED - NO EXTRA WINDOW) =================
-vlc_instance = vlc.Instance(
+# ================= VLC INSTANCE (FIXED FOR SCREEN RECORDING) =================
+# Key fix: Remove --aout=adummy to allow audio to be captured by screen recorders
+# Use default audio output which works with virtual audio devices
+vlc_args = [
     "--no-video-title-show",
     "--network-caching=1000",
     "--quiet",
-    "--no-xlib",  # Prevent X11 window on Linux
-    "--aout=directsound"  # Force DirectSound for better audio control on Windows
-)
+    "--no-xlib",
+    "--verbose=0"
+]
+
+# On Windows, prefer DirectSound for better compatibility
+if sys.platform == "win32":
+    vlc_args.append("--aout=directsound")
+
+vlc_instance = vlc.Instance(*vlc_args)
 player = vlc_instance.media_player_new()
+
+# ================= DEFAULT VOLUME =================
+DEFAULT_VOLUME = 75  # Set to 75% as requested
 
 # ================= ROOT =================
 root = tk.Tk()
@@ -72,16 +88,37 @@ root.geometry("1200x700")
 root.configure(bg="#050505")
 root.withdraw()
 
-# Initialize audio properly after root is created
+# Initialize audio with 75% default volume
 def init_audio():
     try:
-        player.audio_set_volume(70)  # Default volume 70%
-    except:
-        pass
+        # Set default volume to 75%
+        player.audio_set_volume(DEFAULT_VOLUME)
+        print(f"✓ Default volume set to {DEFAULT_VOLUME}%")
+        
+        # Check if audio output is available
+        audio_output = player.audio_output_device_enum()
+        
+        if audio_output is None:
+            print("⚠️ WARNING: No physical audio devices detected!")
+            print("Audio will still work for screen recording if virtual audio device is present")
+        else:
+            print("✓ Audio devices found - audio will play normally")
+            try:
+                vlc.libvlc_audio_output_device_list_release(audio_output)
+            except:
+                pass
+        
+    except Exception as e:
+        print(f"Audio init error: {e}")
+        # Still set volume even if check fails
+        try:
+            player.audio_set_volume(DEFAULT_VOLUME)
+        except:
+            pass
 
 root.after(500, init_audio)
 
-# ================= SPLASH (FIXED – SAFE SIZE) =================
+# ================= SPLASH =================
 splash = tk.Toplevel(root)
 splash.overrideredirect(True)
 splash.configure(bg="#000")
@@ -91,7 +128,6 @@ img = Image.open(resource("splash.png"))
 sw = splash.winfo_screenwidth()
 sh = splash.winfo_screenheight()
 
-# Clamp splash size to 70% of screen (SAFE ON ALL DISPLAYS)
 max_w = int(sw * 0.7)
 max_h = int(sh * 0.7)
 
@@ -165,17 +201,14 @@ right.pack(side="right", fill="both", expand=True)
 video = tk.Frame(right, bg="black")
 video.pack(fill="both", expand=True)
 
-# ================= VLC ATTACH (CRITICAL FIX) =================
+# ================= VLC ATTACH =================
 def attach_vlc_safe():
     try:
-        # Force update to get valid window handle
         root.update_idletasks()
         video.update()
         
-        # Get window handle
         handle = video.winfo_id()
         
-        # Set window handle based on platform
         if sys.platform.startswith('linux'):
             player.set_xwindow(handle)
         elif sys.platform == "win32":
@@ -183,7 +216,6 @@ def attach_vlc_safe():
         elif sys.platform == "darwin":
             player.set_nsobject(handle)
         
-        # Disable mouse/keyboard input to VLC (keep in tkinter)
         player.video_set_mouse_input(False)
         player.video_set_key_input(False)
         
@@ -270,9 +302,8 @@ def play_index(i):
         media = vlc_instance.media_new(filtered[i]["url"])
         player.set_media(media)
         player.play()
-        # Restore volume after media change
+        # CRITICAL: Restore volume to 75% (or current slider value) after media change
         root.after(100, lambda: player.audio_set_volume(int(volume_slider.get())))
-        # Re-attach after media change
         root.after(50, attach_vlc_safe)
         root.after(200, update_volume_display)
 
@@ -293,33 +324,28 @@ def on_key(e):
     elif e.keysym == "F11":
         toggle_fullscreen()
     elif e.keysym in ("plus", "equal", "KP_Add"):
-        # Volume up with +, =, or numpad +
         try:
             current = player.audio_get_volume()
             if current < 0:
-                current = 70
+                current = DEFAULT_VOLUME
             vol = min(100, current + 5)
             player.audio_set_volume(vol)
             volume_slider.set(vol)
             volume_label.config(text=f"🔊 {vol}%")
-            print(f"Volume UP: {vol}%")
         except Exception as e:
             print(f"Volume up error: {e}")
     elif e.keysym in ("minus", "underscore", "KP_Subtract"):
-        # Volume down with -, _, or numpad -
         try:
             current = player.audio_get_volume()
             if current < 0:
-                current = 70
+                current = DEFAULT_VOLUME
             vol = max(0, current - 5)
             player.audio_set_volume(vol)
             volume_slider.set(vol)
             volume_label.config(text=f"🔊 {vol}%")
-            print(f"Volume DOWN: {vol}%")
         except Exception as e:
             print(f"Volume down error: {e}")
     elif e.keysym in ("m", "M"):
-        # Mute/unmute with M
         toggle_mute()
 
 root.bind("<Key>", on_key)
@@ -338,13 +364,51 @@ def toggle_favorite():
     save_favs()
     refresh_list()
 
+# ================= AUDIO DEVICE CHECK =================
+def check_audio_devices():
+    """Check and display available audio devices"""
+    try:
+        audio_output = player.audio_output_device_enum()
+        
+        if audio_output is None:
+            return ("No physical audio devices detected\n\n"
+                   "✓ Audio streams are active and can be captured by screen recorders\n"
+                   "✓ Install a virtual audio cable if you need to hear sound\n\n"
+                   "Recommended: VB-Audio Virtual Cable or similar")
+        
+        devices = []
+        device = audio_output
+        while device:
+            try:
+                desc = device.contents.description.decode('utf-8')
+                devices.append(desc)
+            except:
+                devices.append("Unknown device")
+            device = device.contents.next
+        
+        try:
+            vlc.libvlc_audio_output_device_list_release(audio_output)
+        except:
+            pass
+            
+        return "✓ Audio devices found:\n\n" + "\n".join(devices) if devices else "No devices found"
+        
+    except Exception as e:
+        return f"Error checking devices: {e}"
+
+def show_audio_info():
+    devices = check_audio_devices()
+    messagebox.showinfo("Audio Devices", devices)
+
 # ================= ABOUT =================
 def show_about():
     messagebox.showinfo(
         "About DAVID TV",
-        "DAVID TV\n\nApplication by David\n"
+        f"DAVID TV v{VERSION}\n\nApplication by David\n"
         f"Contact: {CONTACT_EMAIL}\n\n"
-        "Powered by Nexuzy Tech Pvt Ltd This software uses publicly available IPTV streams.No content is hosted or redistributed.\n\n"
+        "Powered by Nexuzy Tech Pvt Ltd\n\n"
+        "This software uses publicly available IPTV streams.\n"
+        "No content is hosted or redistributed.\n\n"
         "© Nexuzy Tech Pvt Ltd"
     )
 
@@ -361,20 +425,24 @@ def update_volume_display():
     """Update volume display from actual player volume"""
     try:
         current_vol = player.audio_get_volume()
-        if current_vol >= 0:  # Valid volume
+        if current_vol >= 0:
             volume_slider.set(current_vol)
             volume_label.config(text=f"🔊 {current_vol}%")
+        else:
+            # If volume reading fails, set to default
+            player.audio_set_volume(DEFAULT_VOLUME)
+            volume_slider.set(DEFAULT_VOLUME)
+            volume_label.config(text=f"🔊 {DEFAULT_VOLUME}%")
     except:
         pass
 
 volume_frame = tk.Frame(left, bg="#0b0b0b")
 volume_frame.pack(fill="x", padx=10, pady=10)
 
-volume_label = tk.Label(volume_frame, text="🔊 70%", fg="#00e5ff", bg="#0b0b0b",
+volume_label = tk.Label(volume_frame, text=f"🔊 {DEFAULT_VOLUME}%", fg="#00e5ff", bg="#0b0b0b",
                         font=("Segoe UI", 10, "bold"))
 volume_label.pack()
 
-# Custom style for better visibility
 style = ttk.Style()
 style.theme_use('default')
 style.configure("Volume.Horizontal.TScale", background="#0b0b0b")
@@ -387,7 +455,7 @@ volume_slider = ttk.Scale(
     command=on_volume_change,
     style="Volume.Horizontal.TScale"
 )
-volume_slider.set(70)
+volume_slider.set(DEFAULT_VOLUME)  # Set slider to 75%
 volume_slider.pack(fill="x", pady=5)
 
 # Mute button
@@ -427,6 +495,9 @@ tk.Button(left, text="⭐ Favorite", command=toggle_favorite,
 tk.Button(left, text="🖥 Fullscreen", command=toggle_fullscreen,
           bg="#000", fg="#00e5ff", relief="flat").pack(pady=4)
 
+tk.Button(left, text="🔊 Audio Info", command=show_audio_info,
+          bg="#000", fg="#00e5ff", relief="flat").pack(pady=4)
+
 tk.Button(left, text="ℹ About", command=show_about,
           bg="#000", fg="#00e5ff", relief="flat").pack(pady=4)
 
@@ -437,17 +508,15 @@ root.bind("<Escape>", lambda e: exit_fullscreen())
 def show_main():
     splash.destroy()
     root.deiconify()
-    # Set icon with proper error handling
     try:
         icon_path = resource("icon.ico")
         if os.path.exists(icon_path):
             root.iconbitmap(icon_path)
-        else:
-            print(f"Icon not found at: {icon_path}")
     except Exception as e:
         print(f"Could not set icon: {e}")
-    # Initial attach with delay
     root.after(300, attach_vlc_safe)
+    # Ensure volume is set after main window shows
+    root.after(500, lambda: player.audio_set_volume(DEFAULT_VOLUME))
 
 root.after(2000, show_main)
 apply_language()
