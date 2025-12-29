@@ -240,4 +240,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 👨‍💻 Author
 
 **David**
-- Email: davidk76011
+- Email: davidk76011@gmail.com
