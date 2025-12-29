@@ -59,6 +59,13 @@ A beautiful, feature-rich IPTV player for streaming Indian TV channels across mu
    git clone https://github.com/david0154/david-tv.git
    cd david-tv
    ```
+   
+### 🔹 Step 2: Create a Virtual Environment (Windows)
+
+```bash
+python -m venv venv
+venv\Scripts\activate
+```
 
 2. **Install dependencies**
    ```bash
