@@ -56,7 +56,7 @@ A beautiful, feature-rich IPTV player for streaming Indian TV channels across mu
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/david-tv.git
+   git clone https://github.com/david0154/david-tv.git
    cd david-tv
    ```
 
