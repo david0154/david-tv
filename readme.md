@@ -9,7 +9,7 @@ A beautiful, feature-rich IPTV player for streaming Indian TV channels across mu
 
 ## ✨ Features
 
-- 🌐 **Multi-Language Support**: Hindi, Bangla, Tamil, Telugu, Malayalam, Kannada, Marathi, Punjabi, Odia, English
+- 🌐 **Multi-Language Support**: Hindi, Bangla, Tamil, Telugu, Malayalam, Kannada, Marathi, Punjabi, Odia,Nepali, Konkani, Urdu, Assamese, Gujarati, English
 - 🔍 **Real-time Search**: Quickly find your favorite channels
 - ⭐ **Favorites System**: Save and manage your preferred channels
 - 🎚️ **Volume Control**: Slider and keyboard shortcuts
